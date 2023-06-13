@@ -118,35 +118,59 @@ class InputHandler:
         pass
 
     def convert_message_to_list(self, data):
-        # data_list = []
-        #
-        # data.triangle
-        # data.circle
-        # data.cross
-        # data.square
-        #
-        # data.d_up
-        # data.d_right
-        # data.d_down
-        # data.d_left
-        #
-        # data_list.append(data.right_trigger
-        # data_list.append(data.right_bumper
-        # data_list.append(data.left_trigger
-        # data_list.append(data.left_bumper
-        #
-        # data_list.append(data.start
-        # data_list.append(data.select
-        #
-        # data_list.append(data.left_joy_x
-        # data_list.append(data.left_joy_y
-        # data_list.append(data.left_joy_in
-        #
-        #
-        # data_list.append(data.right_joy_x
-        # data_list.append(data.right_joy_y
-        # right_joy_in
-        pass
+        data_list = []
+
+        data_list.append(data.triangle)
+        data_list.append(data.circle)
+        data_list.append(data.cross)
+        data_list.append(data.square)
+
+        data_list.append(data.d_up)
+        data_list.append(data.d_right)
+        data_list.append(data.d_down)
+        data_list.append(data.d_left)
+
+        data_list.append(data.right_trigger)
+        data_list.append(data.right_bumper)
+        data_list.append(data.left_trigger)
+        data_list.append(data.left_bumper)
+
+        data_list.append(data.start)
+        data_list.append(data.select)
+
+        data_list.append(data.left_joy_x)
+        data_list.append(data.left_joy_y)
+        data_list.append(data.left_joy_in)
+
+
+        data_list.append(data.right_joy_x)
+        data_list.append(data.right_joy_y)
+        data_list.append(data.right_joy_in)
+
+        data_list_held = []
+
+        data_list_held.append(data.triangle_HeldDur)
+        data_list_held.append(data.circle_HeldDur)
+        data_list_held.append(data.cross_HeldDur)
+        data_list_held.append(data.square_HeldDur)
+
+        data_list_held.append(data.d_up_HeldDur)
+        data_list_held.append(data.d_right_HeldDur)
+        data_list_held.append(data.d_down_HeldDur)
+        data_list_held.append(data.d_left_HeldDur)
+
+        data_list_held.append(data.right_trigger_HeldDur)
+        data_list_held.append(data.right_bumper_HeldDur)
+        data_list_held.append(data.left_trigger_HeldDur)
+        data_list_held.append(data.left_bumper_HeldDur)
+
+        data_list_held.append(data.start_HeldDur)
+        data_list_held.append(data.select_HeldDur)
+
+        data_list_held.append(data.left_joy_in_HeldDur)
+        data_list_held.append(data.right_joy_in_HeldDur)
+
+
 
 
 class SpotController:
@@ -167,16 +191,74 @@ class SpotController:
                 Bool,
                 queue_size=10)
         rospy.Subscriber('JoyStickOut', JoyStickOut,self.get_joystick_input)
-
+ 
         # spin() simply keeps python from exiting until this node is stopped
         rospy.spin()
 
+
+    def read_joy_in(self,data):
+        self.LeftJoystickY = data.left_joy_y 
+        self.LeftJoystickX = data.left_joy_x
+        self.RightJoystickY = 0
+        self.RightJoystickX = 0
+
+        self.LeftTrigger = 0
+        self.LeftTriggerHeldDur = 0
+
+        self.RightTrigger = 0
+        self.RightTriggerHeldDur = 0
+
+        self.LeftBumper = 0
+        self.LeftBumperHeldDur = 0
+
+        self.RightBumper = 0
+        self.RightBumperHeldDur = 0
+
+        self.A = 0
+        self.AHeldDur = 0
+
+        self.X = 0
+        self.XHeldDur = 0
+
+        self.Y = 0
+        self.YHeldDur = 0
+
+        self.B = 0
+        self.BHeldDur = 0
+
+        self.LeftThumb = 0
+        self.LeftThumbHeldDur = 0
+
+        self.RightThumb = 0
+        self.RightThumbHeldDur = 0
+
+        self.Back = 0
+        self.BackHeldDur = 0
+
+        self.Start = 0
+        self.StartHeldDur = 0
+
+        self.LeftDPad = 0
+        self.LeftDPadHeldDur = 0
+
+        self.RightDPad = 0
+        self.RightDPadHeldDur = 0
+
+        self.UpDPad = 0
+        self.UpDPadHeldDur = 0
+
+        self.DownDPad = 0
+        self.DownDPadHeldDur = 0
+
+
     def get_joystick_input(self, data):
         # print("trying to read input")
+        self.convert_message_to_list(data)
 
         # ALWAYS READ FOR E STOPS FIRST
         if not self.current_state.hard_e_stop_enabled:
             if self.key_combo_pressed([data.left_bumper,data.left_trigger,data.right_bumper,data.right_trigger, data.d_up, data.triangle]):
+
                 self.hard_e_stop_proxy()
                 print("HARD E STOP PRESSED")
                 self.current_state.hard_e_stop_enabled = True
@@ -242,13 +324,14 @@ class SpotController:
 
 
     def handle_input_for_initialisation(self, data):
-        
+         
         #check if we have the lease before doing anything
         if not self.current_state.has_lease:
             
-            if self.key_combo_held([data.select_HeldDur, data.start_HeldDur]):
+            # if self.key_combo_held([data.select_HeldDur, data.start_HeldDur]):
+            if self.list_key_combo_held([12,13]):
                 # claim lease and update state
-                _ = self.obtain_lease_proxy()
+                # _ = self.obtain_lease_proxy()
                 self.current_state.has_lease = True
                 print("Obtaining spot lease")
 
@@ -262,15 +345,15 @@ class SpotController:
         
         # Now check if we have motor power
         if not self.current_state.motor_power_on:
-            if self.key_combo_held([data.start_HeldDur]):
+            if self.list_key_combo_held([12]):
                 print("powering on motors")
                 self.current_state.motor_power_on = True
                 # power on motor and update state
-                _ = self.power_on_proxy()
+                # _ = self.power_on_proxy()
                 
             # motors not requested power on, leave method
             else:
-               return False
+                return False
         return True
 
     # initialise all service proxies
@@ -307,6 +390,111 @@ class SpotController:
             if key_dur < SpotController.HELD_DURATION:
                 return False
         return True
+
+    
+
+    def list_key_combo_pressed(self,goal_indexes):
+
+
+        goal_presses = self.generate_keylist_form_ind(goal_indexes)
+         
+        s = sum([sum(x) for x in zip(self.current_key_pressed_list,goal_presses)])
+        if s  != 0 :
+            return False
+        return True
+
+    def list_key_combo_held(self,goal_indexes):
+        
+
+        goal_presses = self.generate_keylist_form_ind(goal_indexes)
+         
+        s = sum([sum(x) for x in zip(self.current_key_pressed_list,goal_presses)])
+        if s  > 0 :
+            return False
+        for index in goal_indexes:
+            if self.current_key_held_lsit[index] < SpotController.HELD_DURATION:
+                return False
+        return True
+        # # print(current_held, goal_held)
+        # for i in range(len(current_held)):
+        #     tmp_curr = 0.0 
+        #     if current_held[i] > 0:
+        #         tmp_curr = 1.0
+        #
+        #     if int(goal_held[i]) + int(tmp_curr) and current_held[i] == 0 > SpotController.HELD_DURATION:
+        #         pass
+        #     else:
+        #         # print("index ", i, goal_held[i], current_held[i], tmp_curr)
+        #         return False
+        # print("here")
+        # return True
+            
+    
+    def generate_keylist_form_ind(self, indexes):
+        goal_keys = []
+        for i in range(16):
+            val = 0.0
+            if i in indexes:
+                val = -1.0
+            goal_keys.append(val)
+        return goal_keys
+                
+
+    def convert_message_to_list(self, data):
+        data_list = []
+
+        data_list.append(data.triangle) #0
+        data_list.append(data.circle) #1
+        data_list.append(data.cross)
+        data_list.append(data.square)
+
+        data_list.append(data.d_up)
+        data_list.append(data.d_right)
+        data_list.append(data.d_down)
+        data_list.append(data.d_left)
+
+        data_list.append(data.right_trigger)
+        data_list.append(data.right_bumper)
+        data_list.append(data.left_trigger)
+        data_list.append(data.left_bumper)
+
+        data_list.append(data.start)
+        data_list.append(data.select)
+
+        data_list.append(data.left_joy_in)
+
+        data_list.append(data.right_joy_in)
+        data_list.append(data.left_joy_x)
+        data_list.append(data.left_joy_y)
+
+        data_list.append(data.right_joy_x)
+        data_list.append(data.right_joy_y)
+
+        data_list_held = []
+
+        data_list_held.append(data.triangle_HeldDur)
+        data_list_held.append(data.circle_HeldDur)
+        data_list_held.append(data.cross_HeldDur)
+        data_list_held.append(data.square_HeldDur)
+
+        data_list_held.append(data.d_up_HeldDur)
+        data_list_held.append(data.d_right_HeldDur)
+        data_list_held.append(data.d_down_HeldDur)
+        data_list_held.append(data.d_left_HeldDur)
+
+        data_list_held.append(data.right_trigger_HeldDur)
+        data_list_held.append(data.right_bumper_HeldDur)
+        data_list_held.append(data.left_trigger_HeldDur)
+        data_list_held.append(data.left_bumper_HeldDur)
+
+        data_list_held.append(data.start_HeldDur)
+        data_list_held.append(data.select_HeldDur)
+
+        data_list_held.append(data.left_joy_in_HeldDur)
+        data_list_held.append(data.right_joy_in_HeldDur)
+        self.current_key_pressed_list = data_list
+        self.current_key_held_lsit = data_list_held
+        # return data_list, data_list_held
 
     def release_lease(self):
         command = '/spot/release'
