@@ -1,5 +1,11 @@
+#!/usr/bin/env python3
 import sys
 import rospy
+from std_srvs.srv import Trigger
+from std_msgs.msg import Bool
+
+from joystick_input.msg import JoyStickOut
+# import std_srvs.srv
 def val_clamp( n, clamp_range):
     minn = clamp_range[0]
     maxn = clamp_range[1]
@@ -84,7 +90,7 @@ class SpotBodyMovement:
         self.angular = array_clamp(temp_angular, SpotBodyMovement.MOTION_LIMITS)
 
 class SpotState:
-
+    
     def __init__(self) -> None:
         self.has_lease = False
         self.motor_power_on = False
@@ -143,27 +149,62 @@ class InputHandler:
         pass
 
 
-
 class SpotController:
 
 
+    HELD_DURATION = 3.0
     def __init__(self) -> None:
         
 
         # init spot variables
         self.current_state = SpotState()
 
+        self.init_serv_proxies()
+
         # init rospy node
         rospy.init_node("spot_joystick_bridge")
-
+        self.joystick_reset_pub = rospy.Publisher('JoyStickReset',
+                Bool,
+                queue_size=10)
         rospy.Subscriber('JoyStickOut', JoyStickOut,self.get_joystick_input)
 
         # spin() simply keeps python from exiting until this node is stopped
         rospy.spin()
 
     def get_joystick_input(self, data):
+        # print("trying to read input")
 
         # ALWAYS READ FOR E STOPS FIRST
+        if not self.current_state.hard_e_stop_enabled:
+            if self.key_combo_pressed([data.left_bumper,data.left_trigger,data.right_bumper,data.right_trigger, data.d_up, data.triangle]):
+                self.hard_e_stop_proxy()
+                print("HARD E STOP PRESSED")
+                self.current_state.hard_e_stop_enabled = True
+                return
+        else:
+
+            if self.key_combo_pressed([data.left_bumper,data.left_trigger,data.right_bumper,data.right_trigger, data.d_up, data.triangle]):
+                print("unlocking hard e stop")
+                self.hard_e_stop_release_proxy()
+
+                self.current_state.hard_e_stop_enabled = False
+
+        # gentle e stop
+
+        # if not self.current_state.gentle_e_stop_enabled:
+        if self.key_combo_pressed([data.left_bumper,data.left_trigger,data.right_bumper,data.right_trigger ]):
+            # self.current_state.gentle_e_stop_enabled = True
+            # self.gentle_e_stop_proxy()
+            self.current_state.is_sitting = True
+            self.soft_e_stop_proxy()
+
+        # stop all commands
+        if self.key_combo_pressed([data.right_joy_in, data.left_joy_in]):
+            print("STOPPING ALL COMMANDS")
+            self.stop_command_proxy()
+
+
+
 
 
         
@@ -172,16 +213,19 @@ class SpotController:
             return
 
         # We should have the lease and motor power.
+        # print("We now have the lease and motors are powered on")
 
-        # detecting a sit/stand request
-        if data.select and data.select:
-            if self.current_state.is_sitting:
-                # tell spot to stand and update state
-                pass
-            else:
-                #tell spot to sit and update state
-                pass
+        # detecting a sitrequest
+        if not self.current_state.is_sitting and self.key_combo_held([data.select_HeldDur,data.left_trigger_HeldDur]):
+            print("Putting spot in sit")
+            self.current_state.is_sitting = True
+            _ = self.sit_proxy()
 
+        # detect stand request
+        if self.current_state.is_sitting and self.key_combo_held([data.select_HeldDur,data.left_bumper_HeldDur]):
+            print("Putting spot in stand")
+            self.current_state.is_sitting = False 
+            _ = self.stand_proxy()
         # detect a mode change; static pose or movement mode
 
         # FROM HERE WE CAN JUST READ ANY INPUT NORMALLY
@@ -202,56 +246,93 @@ class SpotController:
         #check if we have the lease before doing anything
         if not self.current_state.has_lease:
             
-            if data.select and data.start:
+            if self.key_combo_held([data.select_HeldDur, data.start_HeldDur]):
                 # claim lease and update state
-                pass
+                _ = self.obtain_lease_proxy()
+                self.current_state.has_lease = True
+                print("Obtaining spot lease")
 
-                # havent tried to aquire lease, leave method
-            else:
-                return False
+                self.joystick_reset_pub.publish(True)
+
+            #we have now either got the lease, need to retrieve new inputs so return false
+
+            return False
 
         # if we get to here, we have control of the lease
         
         # Now check if we have motor power
         if not self.current_state.motor_power_on:
-            if data.right_bumper and data.left_bumpter:
+            if self.key_combo_held([data.start_HeldDur]):
+                print("powering on motors")
+                self.current_state.motor_power_on = True
                 # power on motor and update state
-                pass
+                _ = self.power_on_proxy()
                 
             # motors not requested power on, leave method
             else:
                return False
+        return True
+
+    # initialise all service proxies
+    def init_serv_proxies(self):
+
+        self.obtain_lease_proxy = rospy.ServiceProxy('/spot/claim', Trigger) 
+        self.power_on_proxy = rospy.ServiceProxy('/spot/power_on', Trigger)
+
+        self.sit_proxy = rospy.ServiceProxy('/spot/sit', Trigger)
+        self.stand_proxy = rospy.ServiceProxy('/spot/stand', Trigger)
 
 
+        # estops
+        self.hard_e_stop_proxy = rospy.ServiceProxy('/spot/estop/hard', Trigger)
+        self.hard_e_stop_release_proxy = rospy.ServiceProxy('/spot/estop/release', Trigger)
+
+        self.soft_e_stop_proxy = rospy.ServiceProxy('/spot/estop/soft', Trigger)
     # Get/release control of spot
-    def obtain_lease(self):
-        command = '/spot/claim'
+    # def obtain_lease(self):
+    #     command = '/spot/claim'
+    #     obtain_lease_proxy = rospy.ServiceProxy('/spot/claim', Trigger) 
+    #     resp1 = obtain_lease_proxy()
+        self.stop_command_proxy = rospy.ServiceProxy('/spot/stop', Trigger)
+
+
+    def key_combo_pressed(self, keys_to_verify):
+        for key in keys_to_verify:
+            if not key:
+                return False
+        return True
+
+    def key_combo_held(self,key_durs_to_verify):
+        for key_dur in key_durs_to_verify:
+            if key_dur < SpotController.HELD_DURATION:
+                return False
+        return True
 
     def release_lease(self):
         command = '/spot/release'
 
-    # Power on motors
-    def power_on(self):
-        command = '/spot/power_on'
+    # # Power on motors
+    # def power_on(self):
+    #     command = '/spot/power_on'
 
     # stand
-    def stand(self):
-        command = '/spot/stand'
-
-    def sit(self):
-        command = '/spot/sit'
+    # def stand(self):
+    #     command = '/spot/stand'
+    #
+    # def sit(self):
+    #     command = '/spot/sit'
 
     # E stops
     # Gentle
-    def gentle_e_stop(self):
-        command = '/spot/estop/gentle'
+    # def gentle_e_stop(self):
+    #     command = '/spot/estop/gentle'
 
     # Hard
-    def hard_e_stop(self):
-        command = '/spot/estop/hard'
-
-    def release_hard_e_stop(self):
-        command = '/spot/estop/release'
+    # def hard_e_stop(self):
+    #     command = '/spot/estop/hard'
+    #
+    # def release_hard_e_stop(self):
+    #     command = '/spot/estop/release'
 
     # stop related commands
     def command_stop(self):
@@ -276,3 +357,8 @@ class SpotController:
 
             command = '/spot/roll_over_right'
         return command
+
+
+if __name__ == "__main__":
+    spot_bridge = SpotController()
+
